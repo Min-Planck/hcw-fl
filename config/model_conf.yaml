@@ -1,0 +1,24 @@
+base: &base_config
+  channels: 3
+  img_size: [32, 32]  # Only MLP need this parameter
+  num_classes: 10 
+  hidden_size: 200 # Only MLP need this parameter
+
+mlp: 
+  <<: *base_config
+
+resnet18: 
+  <<: *base_config
+
+resnet34: 
+  <<: *base_config
+
+resnet50: 
+  <<: *base_config
+
+resnet101: 
+  <<: *base_config
+
+cnn_text: # Only use for text classification - agnews
+  <<: *base_config
+
