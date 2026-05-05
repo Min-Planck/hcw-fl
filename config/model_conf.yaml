@@ -4,6 +4,9 @@ base: &base_config
   num_classes: 10 
   hidden_size: 200 # Only MLP need this parameter
 
+cnn: 
+  <<: *base_config
+  
 mlp: 
   <<: *base_config
 
