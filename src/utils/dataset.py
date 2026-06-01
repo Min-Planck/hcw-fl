@@ -250,21 +250,19 @@ def partition_data(dataset,
 
 def get_train_data(dataset_name,
                    num_clients,
-                   batch_size, 
+                   batch_size,
                    alphas: list = [0.5, 0.7, 0.9, 1],
                    fractions: list = [0.25, 0.25, 0.25, 0.25],
                    mode: str = 'dirichlet',
-                   num_iids: int = 3, 
+                   num_iids: int = 3,
                    shards: list = None):
 
     assert abs(sum(fractions) - 1.0) < 1e-6, "Tổng 'fractions' phải bằng 1"
-    assert len(alphas) == len(fractions), "'alphas' và 'fractions' phải có cùng độ dài"
-    
+    assert num_clients > 0, "num_clients phải > 0"
 
     trainset, testset = load_data(dataset_name)
     classes = trainset.classes
 
-    # Tính số client/fold
     clients_per_fold = [int(frac * num_clients) for frac in fractions]
     while sum(clients_per_fold) < num_clients:
         for i in range(len(clients_per_fold)):
@@ -272,7 +270,6 @@ def get_train_data(dataset_name,
             if sum(clients_per_fold) == num_clients:
                 break
 
-    # Tính số lượng dữ liệu mỗi fold
     total_data = len(trainset)
     data_per_fold = [int((num / num_clients) * total_data) for num in clients_per_fold]
     while sum(data_per_fold) < total_data:
@@ -282,27 +279,30 @@ def get_train_data(dataset_name,
                 break
 
     partition_fold = random_split(trainset, data_per_fold)
-
     ids, labels_dist = [], []
 
     for i in range(len(fractions)):
         sub_set = partition_fold[i]
+        original_indices = sub_set.indices
 
         if dataset_name in ['cifar10', 'cifar100', 'agnews']:
-            data = [trainset.data[idx] for idx in sub_set.indices]
-            targets = [trainset.targets[idx] for idx in sub_set.indices]
+            data = [trainset.data[idx] for idx in original_indices]
+            targets = [trainset.targets[idx] for idx in original_indices]
         else:
-            data = trainset.data[sub_set.indices]
-            targets = trainset.targets[sub_set.indices].tolist()
+            data = trainset.data[original_indices]
+            targets = trainset.targets[original_indices].tolist()
 
         sub_dataset = CustomDataset(data, targets)
 
-        if mode == 'sharding' and shards[i] > 0:
+        if mode == 'sharding' and shards is not None and shards[i] > 0:
             id, dist = partition_data_sharding(sub_dataset, clients_per_fold[i], shards[i], classes)
         elif mode == "dirichlet":
             id, dist = partition_data(sub_dataset, clients_per_fold[i], alphas[i], classes)
-        else: 
+        else:
             id, dist = partition_data_special_case(sub_dataset, clients_per_fold[i], num_iids)
+
+        # Map indices local → indices gốc trainset
+        id = [[original_indices[idx] for idx in client_ids] for client_ids in id]
 
         ids.extend(id)
         labels_dist.extend(dist)
