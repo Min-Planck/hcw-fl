@@ -84,7 +84,7 @@ def get_transform(dataset_name):
         return None
     
 def load_agnews():
-    dataset = load_dataset("ag_news")
+    dataset = load_dataset("SetFit/ag_news")
 
     train_raw = dataset['train']
     test_raw = dataset['test']
@@ -166,13 +166,14 @@ def partition_data_sharding(dataset, num_clients, num_shards_per_client, classes
             client_indices.extend(shards_list[shard_idx].tolist())
             
         
+        ids.append(client_indices)
+        
         if isinstance(dataset, CustomDataset):
             counter = Counter(list(map(lambda x: int(dataset.targets[x]), ids[i])))
         else: 
             counter = Counter(list(map(lambda x: dataset[x][1], ids[i])))
-        dist = {classes_name[k]: counter.get(k, 0) for k in range(num_classes)}
-        label_dist.append(dist)
-        ids.append(client_indices)
+            
+        label_dist.append({classes_name[j]: counter.get(j, 0) for j in range(num_classes)})
 
     return ids, label_dist
 
