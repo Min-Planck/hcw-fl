@@ -33,7 +33,8 @@ ids, dist, trainloaders, testloader, client_dataset_ratio = get_train_data(
     num_clients=general_cfg.num_clients,
     batch_size=general_cfg.batch_size, 
     fractions=general_cfg.partition_fraction,
-    alphas=general_cfg.partition_alpha
+    alphas=general_cfg.partition_alpha,
+    shards=general_cfg.shards
 )
 
 if ALGO == 'fedhcw': 

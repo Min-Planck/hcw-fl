@@ -136,52 +136,43 @@ def load_data(dataset: str):
 
         return trainset, testset
     
-def partition_data_sharding(dataset,
-                            num_clients: int,
-                            num_shards_per_client: int,
-                            classes_name: list):
-
+def partition_data_sharding(dataset, num_clients, num_shards_per_client, classes_name):
     num_classes = len(classes_name)
-    num_shards = num_clients * num_shards_per_client
-    n_shards_per_label = num_shards // num_classes
-
-    indices_class = [[] for _ in range(num_classes)]
-    for i, lab in enumerate(dataset.targets):
-        indices_class[lab].append(i)
-
-    shards_by_label = {}
-    for label in range(num_classes):
-        np.random.shuffle(indices_class[label])
-        shards_by_label[label] = np.array_split(
-            np.array(indices_class[label]), n_shards_per_label
-        )
-
-    # Gán shards cho từng client
-    shard_ptr = {label: 0 for label in range(num_classes)}
+    
+    total_shards = num_clients * num_shards_per_client
+    
+    indices_class = []
+    for j in range(num_classes):
+        idx = np.array([i for i, lab in enumerate(dataset.targets) if lab == j])
+        np.random.shuffle(idx)
+        indices_class.append(idx)
+        
+    sorted_indices = np.concatenate(indices_class)
+ 
+    shards_list = np.array_split(sorted_indices, total_shards)
+    
+    shards_list_indices = list(range(total_shards))
+    np.random.shuffle(shards_list_indices)
+    
     ids = []
     label_dist = []
-
+    
     for i in range(num_clients):
-        available_labels = [
-            label for label in range(num_classes)
-            if shard_ptr[label] < len(shards_by_label[label])
-        ]
-        k = min(num_shards_per_client, len(available_labels))
-        chosen_labels = np.random.choice(available_labels, k, replace=False)
-
         client_indices = []
-        for label in chosen_labels:
-            ptr = shard_ptr[label]
-            client_indices.extend(shards_by_label[label][ptr].tolist())
-            shard_ptr[label] += 1
-
-        ids.append(client_indices)
-
+        start_idx = i * num_shards_per_client
+        
+        for j in range(num_shards_per_client):
+            shard_idx = shards_list_indices[start_idx + j]
+            client_indices.extend(shards_list[shard_idx].tolist())
+            
+        
         if isinstance(dataset, CustomDataset):
             counter = Counter(list(map(lambda x: int(dataset.targets[x]), ids[i])))
-        else:
+        else: 
             counter = Counter(list(map(lambda x: dataset[x][1], ids[i])))
-        label_dist.append({classes_name[j]: counter.get(j, 0) for j in range(num_classes)})
+        dist = {classes_name[k]: counter.get(k, 0) for k in range(num_classes)}
+        label_dist.append(dist)
+        ids.append(client_indices)
 
     return ids, label_dist
 
