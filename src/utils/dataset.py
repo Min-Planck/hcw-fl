@@ -11,8 +11,8 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from torch.utils.data import DataLoader, random_split, SubsetRandomSampler
 from datasets import load_dataset 
-import re
-
+import re   
+import numpy as np
 
 class CustomDataset(torch.utils.data.Dataset):
     def __init__(self, input_data, targets, transform=None):
@@ -135,35 +135,53 @@ def load_data(dataset: str):
             testset = dataset_class("data", train=False, download=True, transform=transform)
 
         return trainset, testset
-def partition_data_sharding(dataset, num_clients, num_shards, classes_name):
-    """
-    Dữ liệu được chia ngẫu nhiên theo class, sau đó chia thành shard nhỏ, mỗi client nhận num_shards shard
-    """
-    num_classes = len(classes_name)  
+    
+def partition_data_sharding(dataset,
+                            num_clients: int,
+                            num_shards_per_client: int,
+                            classes_name: list):
+
+    num_classes = len(classes_name)
+    num_shards = num_clients * num_shards_per_client
+    n_shards_per_label = num_shards // num_classes
 
     indices_class = [[] for _ in range(num_classes)]
     for i, lab in enumerate(dataset.targets):
         indices_class[lab].append(i)
 
-    all_indices = []
-    for label_indices in indices_class:
-        random.shuffle(label_indices)
-        all_indices.extend(label_indices)
+    shards_by_label = {}
+    for label in range(num_classes):
+        np.random.shuffle(indices_class[label])
+        shards_by_label[label] = np.array_split(
+            np.array(indices_class[label]), n_shards_per_label
+        )
 
-    total_shards = num_shards * num_clients
-    shard_size = len(all_indices) // total_shards
-    shards = [all_indices[i * shard_size:(i + 1) * shard_size] for i in range(total_shards)]
-    random.shuffle(shards)
-
-    ids = [[] for _ in range(num_clients)]
+    # Gán shards cho từng client
+    shard_ptr = {label: 0 for label in range(num_classes)}
+    ids = []
     label_dist = []
 
     for i in range(num_clients):
-        for j in range(num_shards):
-            idx = i * num_shards + j
-            ids[i].extend(shards[idx])
-        counter = Counter([dataset[x][1] for x in ids[i]])
-        label_dist.append({cls: counter.get(cls, 0) for cls in range(num_classes)})
+        available_labels = [
+            label for label in range(num_classes)
+            if shard_ptr[label] < len(shards_by_label[label])
+        ]
+        k = min(num_shards_per_client, len(available_labels))
+        chosen_labels = np.random.choice(available_labels, k, replace=False)
+
+        client_indices = []
+        for label in chosen_labels:
+            ptr = shard_ptr[label]
+            client_indices.extend(shards_by_label[label][ptr].tolist())
+            shard_ptr[label] += 1
+
+        ids.append(client_indices)
+
+        if isinstance(dataset, CustomDataset):
+            counter = Counter(list(map(lambda x: int(dataset.targets[x]), ids[i])))
+        else:
+            counter = Counter(list(map(lambda x: dataset[x][1], ids[i])))
+        label_dist.append({classes_name[j]: counter.get(j, 0) for j in range(num_classes)})
 
     return ids, label_dist
 
