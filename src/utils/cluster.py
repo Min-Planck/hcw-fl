@@ -21,19 +21,20 @@ def build_distribution(dist, noise_level=0.05):
     distrib_ = distrib_ / distrib_.sum(axis=1, keepdims=True)
     return distrib_
 
-def get_optics_instance(distance, min_smp, xi):
+def get_optics_instance(distance, min_smp, eps):
     if distance == 'hellinger':
-        return OPTICS(min_samples=min_smp, xi=xi, metric=hellinger)
+        return OPTICS(min_samples=min_smp, cluster_method='dbscan', eps=0.45, metric=hellinger)
     elif distance == 'jensenshannon':
-        return OPTICS(min_samples=min_smp, xi=xi, metric=jensen_shannon_divergence_distance)
+        return OPTICS(min_samples=min_smp, cluster_method='dbscan', eps=0.45, metric=jensen_shannon_divergence_distance)
     else:
-        return OPTICS(min_samples=min_smp, xi=xi, metric=distance)
+        return OPTICS(min_samples=min_smp, cluster_method='dbscan', eps=0.45, metric=distance)
 
-def clustering(dist, min_smp=2, xi=0.05, algo='kmeans', distance='manhattan', noise_level=0.05, num_clusters=8, cluster_size=None):
+
+def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', noise_level=0.05, num_clusters=8, cluster_size=None):
     distrib_ = build_distribution(dist, noise_level=noise_level)
     
     if algo == 'optics':
-        optics = get_optics_instance(distance, min_smp, xi)
+        optics = get_optics_instance(distance, min_smp, eps)
         optics.fit(distrib_)
         labels = optics.labels_
     elif algo == 'kmeans': 
