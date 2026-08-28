@@ -52,10 +52,12 @@ moon:
 scaffold:
   <<: *base_config
 
+# weighting method values: 'normal', 'nonlinear', 'directional_decoupling'
 fedhcw: 
   <<: *base_config
   alpha: 5
   temperature: 0.7
+  weighting_method: 'normal' 
   distance: 'hellinger'
 
 fedaaw: 

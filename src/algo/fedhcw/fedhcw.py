@@ -6,11 +6,10 @@ class FedHCW(FedAvg):
 
     def __init__(self, 
                  *args, 
-                weighting_method: Literal['normal', 'nonlinear', 'directional_decoupling'] = 'normal',          
                 **kwargs
     ): 
         super().__init__(*args, **kwargs) 
-        self.weighting_method = weighting_method
+        self.weighting_method = self.algorithm_config['weighting_method']
         self.entropies = self.algorithm_config['entropies']
         self.temperature = self.algorithm_config['temperature']
         self.alpha = self.algorithm_config['alpha']
@@ -85,12 +84,12 @@ class FedHCW(FedAvg):
         local_updates = np.array(weights_results, dtype=object) - np.array(parameters_to_ndarrays(self.current_parameters), dtype=object)
 
         local_gradients = -local_updates/self.learning_rate
-
+        local_grad_vectors = [np.concatenate([arr for arr in local_gradient], axis = None)
+                            for local_gradient in local_gradients]
+        
         if self.weighting_method == 'normal' or self.weighting_method == 'nonlinear':
             global_gradient = np.sum(np.array(num_examples).reshape(len(num_examples), 1) * local_gradients, axis=0) / sum(num_examples)
 
-            local_grad_vectors = [np.concatenate([arr for arr in local_gradient], axis = None)
-                                for local_gradient in local_gradients]
 
             global_grad_vector = np.concatenate([arr for arr in global_gradient], axis = None)
 
@@ -146,15 +145,16 @@ class FedHCW(FedAvg):
         self.current_parameters = ndarrays_to_parameters(parameters_aggregated)
         metrics_aggregated = {}
 
-        losses = [fit_res.num_examples * fit_res.metrics["loss"] for _, fit_res in cluster_results.items()]
-        corrects = [round(fit_res.num_examples * fit_res.metrics["accuracy"]) for _, fit_res in cluster_results.items()]
-        
-        for _, v in cluster_data.items():
-            if len(v) == 1:
-                fit_res = v[0]
-                losses.append(fit_res.num_examples * fit_res.metrics["loss"])
-                corrects.append(round(fit_res.num_examples * fit_res.metrics["accuracy"]))
-                loss = sum(losses) / sum(num_examples)
+        losses = [
+            fit_res.num_examples * fit_res.metrics["loss"]
+            for fit_res in cluster_results.values()
+        ]
+
+        corrects = [
+            round(fit_res.num_examples * fit_res.metrics["accuracy"])
+            for fit_res in cluster_results.values()
+        ]
+
 
         loss = sum(losses) / sum(num_examples)
         accuracy = sum(corrects) / sum(num_examples)
