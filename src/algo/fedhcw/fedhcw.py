@@ -92,9 +92,16 @@ class FedHCW(FedAvg):
 
 
             global_grad_vector = np.concatenate([arr for arr in global_gradient], axis = None)
+            
+            dot_products = [np.dot(local_grad_vector, global_grad_vector) for local_grad_vector in local_grad_vectors]
+            norms = [np.linalg.norm(local_grad_vector) * np.linalg.norm(global_grad_vector) for local_grad_vector in local_grad_vectors]
+            
+            cosine_values = [dot / norm if norm != 0 else 0 for dot, norm in zip(dot_products, norms)]
+            
+            clipped_cosine_values = np.clip(cosine_values, -1.0, 1.0)
 
-            instant_angles = np.arccos([np.dot(local_grad_vector, global_grad_vector) / (np.linalg.norm(local_grad_vector) * np.linalg.norm(global_grad_vector))
-                            for local_grad_vector in local_grad_vectors])
+
+            instant_angles = np.arccos(clipped_cosine_values)
         elif self.weighting_method == 'directional_decoupling':
             unit_grad_vectors = [
                 v / (np.linalg.norm(v) + 1e-12)
