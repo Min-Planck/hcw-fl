@@ -1,14 +1,16 @@
 from ..fl_common_import import *
+from typing import Literal
 from ..fedavg.fedavg import FedAvg
 
 class FedHCW(FedAvg): 
 
     def __init__(self, 
                  *args, 
-                 **kwargs
+                weighting_method: Literal['normal', 'nonlinear', 'directional_decoupling'] = 'normal',          
+                **kwargs
     ): 
         super().__init__(*args, **kwargs) 
-
+        self.weighting_method = weighting_method
         self.entropies = self.algorithm_config['entropies']
         self.temperature = self.algorithm_config['temperature']
         self.alpha = self.algorithm_config['alpha']
@@ -84,16 +86,36 @@ class FedHCW(FedAvg):
 
         local_gradients = -local_updates/self.learning_rate
 
-        global_gradient = np.sum(np.array(num_examples).reshape(len(num_examples), 1) * local_gradients, axis=0) / sum(num_examples)
+        if self.weighting_method == 'normal' or self.weighting_method == 'nonlinear':
+            global_gradient = np.sum(np.array(num_examples).reshape(len(num_examples), 1) * local_gradients, axis=0) / sum(num_examples)
 
-        local_grad_vectors = [np.concatenate([arr for arr in local_gradient], axis = None)
-                              for local_gradient in local_gradients]
+            local_grad_vectors = [np.concatenate([arr for arr in local_gradient], axis = None)
+                                for local_gradient in local_gradients]
 
-        global_grad_vector = np.concatenate([arr for arr in global_gradient], axis = None)
+            global_grad_vector = np.concatenate([arr for arr in global_gradient], axis = None)
 
-        instant_angles = np.arccos([np.dot(local_grad_vector, global_grad_vector) / (np.linalg.norm(local_grad_vector) * np.linalg.norm(global_grad_vector))
-                          for local_grad_vector in local_grad_vectors])
-            
+            instant_angles = np.arccos([np.dot(local_grad_vector, global_grad_vector) / (np.linalg.norm(local_grad_vector) * np.linalg.norm(global_grad_vector))
+                            for local_grad_vector in local_grad_vectors])
+        elif self.weighting_method == 'directional_decoupling':
+            unit_grad_vectors = [
+                v / (np.linalg.norm(v) + 1e-12)
+                for v in local_grad_vectors
+            ]
+
+            reference_vector = np.sum(unit_grad_vectors, axis=0)
+            reference_vector /= (
+                np.linalg.norm(reference_vector) + 1e-12
+            )
+
+            instant_angles = np.arccos([
+                np.clip(
+                    np.dot(u, reference_vector),
+                    -1.0,
+                    1.0
+                )
+                for u in unit_grad_vectors
+            ])
+
         id_to_instant_angle = dict(zip(ids, instant_angles))
         smoothed_angles = []
         for cluster_id in ids:
@@ -107,6 +129,15 @@ class FedHCW(FedAvg):
             self.current_angles[cluster_id] = smoothed
 
         maps = self.alpha*(1-np.exp(-np.exp(-self.alpha*(np.array(smoothed_angles)-1))))
+
+        if self.weighting_method == 'nonlinear':
+            sample_weights = np.log1p(
+                np.array(num_examples, dtype=float)
+            )
+        else:
+            sample_weights = np.array(num_examples, dtype=float)
+
+        weights = (sample_weights * np.exp(maps) / np.sum(sample_weights * np.exp(maps)))
 
         weights = num_examples * np.exp(maps) / sum(num_examples * np.exp(maps))
 
