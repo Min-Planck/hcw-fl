@@ -84,7 +84,7 @@ def get_transform(dataset_name):
         return None
     
 def load_agnews():
-    dataset = load_dataset("SetFit/ag_news")
+    dataset = load_dataset("ag_news")
 
     train_raw = dataset['train']
     test_raw = dataset['test']
@@ -200,7 +200,8 @@ def partition_data_special_case(trainset, num_clients: int, num_iids: int):
         ids.append(id)
         
         counter = Counter(list(map(lambda x: trainset[x][1], ids[i])))
-        label_dist.append({classes[i]: counter.get(i) for i in range(len(classes))})
+        label_dist.append({classes[i]: counter.get(i, 0) for i in range(len(classes))})
+
 
     return ids, label_dist
 
