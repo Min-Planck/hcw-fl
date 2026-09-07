@@ -9,7 +9,7 @@ from .moon import MOON, train_moon, get_moon_model, MoonTypeModel
 from .fedhcw import FedHCW
 from .fedaaw import FedAAW
 from .fedavgm import FedAvgM
-
+from .fedhcw_v2 import FedHCW_V2
 __all__ = [
     'FedAdp',
     'FedAvg',   
@@ -26,5 +26,6 @@ __all__ = [
     'MoonTypeModel', 
     'FedHCW',
     'FedAAW',
-    'FedAvgM'
+    'FedAvgM',
+    'FedHCW_V2'
     ]

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.optim import SGD
 
-from src.algo import get_moon_model, MoonTypeModel, FedAdp, FedAvg, FedCLS, FedDisco, FedImp, FedAAW, FedNTD, MOON, FedAvgM, Scaffold, FedHCW
+from src.algo import get_moon_model, MoonTypeModel, FedAdp, FedAvg, FedCLS, FedDisco, FedImp, FedAAW, FedNTD, MOON, FedAvgM, Scaffold, FedHCW, FedHCW_V2
 from src.models import ResNet18, ResNet34, ResNet50, ResNet101, CNN_Text, MLP, CNN
 
 def get_parameters(net) -> List[np.ndarray]:
@@ -142,6 +142,11 @@ def get_configs(cfg, dist, algo_name):
         algorithm_config['temperature'] = cfg.temperature
         algorithm_config['weighting_method'] = cfg.weighting_method
         algorithm_config = {**algorithm_config, **{'entropies': entropies}}
+    elif algo_name == 'fedhcw2':
+        entropies = [compute_entropy(dist[i]) for i in range(cfg.num_clients)]
+        algorithm_config['alpha'] = cfg.alpha
+        algorithm_config['temperature'] = cfg.temperature
+        algorithm_config = {**algorithm_config, **{'entropies': entropies}}
     elif algo_name == 'fedavgm':
         algorithm_config['server_learning_rate'] = cfg.server_learning_rate
         algorithm_config['server_momentum'] = cfg.server_momentum
@@ -169,6 +174,8 @@ def get_algorithm(algo_name):
         return Scaffold
     elif algo_name == 'fedhcw':
         return FedHCW
+    elif algo_name == 'fedhcw2':
+        return FedHCW_V2
     elif algo_name == 'fedaaw':
         return FedAAW
     elif algo_name == 'fedavgm':

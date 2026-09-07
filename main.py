@@ -11,8 +11,10 @@ from src.client import BaseClient, SimpleClientManager
 
 # ----------- CHANGE HERE -------------
 ALGO = 'fedntd'
-MODEL = ''
-DATASET = ''
+MODEL = 'resnet18'
+DATASET = 'cifar10'
+PARTITION_MODE = 'dirichlet'
+CLUSTER_ALGO = 'optics'
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu' 
 client_resources = {"num_cpus": 2, "num_gpus": 0.2} if DEVICE == "cuda" else {"num_cpus": 1, "num_gpus": 0.0}
 # -------------------------------------
@@ -30,6 +32,7 @@ m_cfg = m_cfg[MODEL]
 set_seed(general_cfg.seed_value)
 ids, dist, trainloaders, testloader, client_dataset_ratio = get_train_data(
     dataset_name=DATASET,
+    mode=PARTITION_MODE,
     num_clients=general_cfg.num_clients,
     batch_size=general_cfg.batch_size, 
     fractions=general_cfg.partition_fraction,
@@ -37,10 +40,10 @@ ids, dist, trainloaders, testloader, client_dataset_ratio = get_train_data(
     shards=general_cfg.shards
 )
 
-if ALGO == 'fedhcw': 
+if ALGO == 'fedhcw' or ALGO == 'fedhcw2': 
     client_cluster_index, distrib_ = clustering(
         dist, 
-        algo='bkmeans',
+        algo=CLUSTER_ALGO,
         num_clusters=10,
         cluster_size=10 * [general_cfg.num_clients / 10], 
         distance=general_cfg.distance,
@@ -65,7 +68,7 @@ def client_fn(context: Context) -> BaseClient:
     )
     net.to(DEVICE)
     trainloader = trainloaders[int(cid)]  
-    cluster_id = client_cluster_index[cid] if ALGO == 'fedhcw' else None
+    cluster_id = client_cluster_index[cid] if ALGO == 'fedhcw' or ALGO == 'fedhcw2' else None
     num_classes = sum(v is not None and v > 0 for v in dist[cid].values())
     return BaseClient(cid, ALGO, net, trainloader, num_classes, general_cfg.local_training_epochs, DEVICE, cluster_id).to_client()
 

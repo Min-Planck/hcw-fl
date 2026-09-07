@@ -60,6 +60,12 @@ fedhcw:
   weighting_method: 'normal' 
   distance: 'hellinger'
 
+fedhcw2: 
+  <<: *base_config
+  alpha: 5
+  temperature: 0.7
+  distance: 'hellinger'
+
 fedaaw: 
   <<: *base_config
   beta: 0.01
