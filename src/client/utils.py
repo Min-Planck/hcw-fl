@@ -36,7 +36,7 @@ def fit_handler(algo_name, cid, config, net, trainloader, client_control=None, p
     """
     if algo_name in ["fedavg", "feddisco", "fedcls", "fedadp", "fedimp", "fedavgm"]:
         res_metrics = train(net, trainloader, DEVICE=config['device'], learning_rate=config["learning_rate"], epochs=config["epochs"])
-    elif algo_name == 'fedhcw': 
+    elif algo_name == 'fedhcw' or algo_name == 'fedhcw2': 
         res_metrics = train(net, trainloader, DEVICE=config['device'], learning_rate=config["learning_rate"], epochs=config["epochs"])
         res_metrics = {**res_metrics, **{"cluster_id": int(config['cluster_id'])}}
     elif algo_name == "fedntd":
