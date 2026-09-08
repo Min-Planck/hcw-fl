@@ -145,7 +145,6 @@ def get_configs(cfg, dist, algo_name):
     elif algo_name == 'fedhcw2':
         entropies = [compute_entropy(dist[i]) for i in range(cfg.num_clients)]
         algorithm_config['alpha'] = cfg.alpha
-        algorithm_config['temperature'] = cfg.temperature
         algorithm_config = {**algorithm_config, **{'entropies': entropies}}
     elif algo_name == 'fedavgm':
         algorithm_config['server_learning_rate'] = cfg.server_learning_rate

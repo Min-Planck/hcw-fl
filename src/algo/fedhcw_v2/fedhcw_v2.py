@@ -10,7 +10,6 @@ class FedHCW_V2(FedAvg):
     ): 
         super().__init__(*args, **kwargs) 
         self.entropies = self.algorithm_config['entropies']
-        self.temperature = self.algorithm_config['temperature']
         self.alpha = self.algorithm_config['alpha']
         self.current_angles = {}
 
