@@ -63,7 +63,6 @@ fedhcw:
 fedhcw2: 
   <<: *base_config
   alpha: 5
-  temperature: 0.7
   distance: 'hellinger'
 
 fedaaw: 
