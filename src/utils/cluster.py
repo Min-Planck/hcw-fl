@@ -29,6 +29,22 @@ def get_optics_instance(distance, min_smp, eps):
     else:
         return OPTICS(min_samples=min_smp, cluster_method='dbscan', eps=0.45, metric=distance)
 
+def dominant_label_clustering(data, alpha=1.5, threshold=0.75):
+    labels_names = list(data[0].keys())
+    K = len(labels_names)
+
+    counts = np.array([[d[l] for l in labels_names] for d in data], dtype=float)
+    prop = counts / counts.sum(axis=1, keepdims=True)
+    signature = (prop > alpha / K).astype(int)
+
+    jaccard_dist = pairwise_distances(signature, metric='jaccard')
+
+    model = AgglomerativeClustering(n_clusters=None, distance_threshold=threshold,
+                                    metric='precomputed', linkage='average')
+    cluster_ids = model.fit_predict(jaccard_dist)
+
+
+    return {i: int(cluster_id) for i, cluster_id in enumerate(cluster_ids)}
 
 def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', noise_level=0.05, num_clusters=8, cluster_size=None):
     distrib_ = build_distribution(dist, noise_level=noise_level)
@@ -37,6 +53,16 @@ def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', n
         optics = get_optics_instance(distance, min_smp, eps)
         optics.fit(distrib_)
         labels = optics.labels_
+        max_label = max([lab for lab in labels if lab != -1], default=-1)
+        next_label = max_label + 1
+        new_labels = []
+        for lab in labels:
+            if lab == -1:
+                new_labels.append(next_label)
+                next_label += 1
+            else:
+                new_labels.append(lab)
+        labels = new_labels
     elif algo == 'kmeans': 
         if distance == 'hellinger':
             labels, centroid = kmeans(X=distrib_, num_clusters=num_clusters, distance_func=hellinger, verbose=False) 
@@ -61,6 +87,8 @@ def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', n
             labels, centroid = balanced_kmeans(X=distrib_, num_clusters=num_clusters, cluster_sizes=cluster_size, distance_func=jensen_shannon_divergence_distance, verbose=False)
         else:
             labels, centroid = balanced_kmeans(X=distrib_, num_clusters=num_clusters, cluster_sizes=cluster_size, verbose=False)
+    elif algo == 'dominant_label':
+        labels = dominant_label_clustering(dist)
 
     client_cluster_index = {i: int(lab) for i, lab in enumerate(labels)}
 
