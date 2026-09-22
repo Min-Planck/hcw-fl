@@ -1,9 +1,11 @@
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.metrics import pairwise_distances
+from sklearn.metrics import pairwise_distances, silhouette_score
 import numpy as np
 import random
 from sklearn.cluster import OPTICS
 from scipy.optimize import linear_sum_assignment
+from scipy.cluster.hierarchy import linkage
+from scipy.spatial.distance import squareform
 
 from .distance import hellinger, jensen_shannon_divergence_distance
 
@@ -29,7 +31,46 @@ def get_optics_instance(distance, min_smp, eps):
     else:
         return OPTICS(min_samples=min_smp, cluster_method='dbscan', eps=0.45, metric=distance)
 
-def dominant_label_clustering(data, alpha=1.5, threshold=0.75):
+def suggest_distance_threshold(jaccard_dist, search_radius=0.1, step=0.02):
+    """Tu dong de xuat distance_threshold: elbow tren dendrogram (bo qua cac muc gop = 0,
+    tuc cac cap client trung khop tuyet doi) roi xac nhan/tinh chinh bang silhouette
+    trong lan can +-search_radius quanh elbow. Day la diem khoi dau hop ly, KHONG thay
+    the viec kiem chung bang downstream accuracy neu can do chinh xac cao cho bao cao.
+
+    Tra ve: (threshold_de_xuat: float, chan_doan: dict)
+    """
+    Z = linkage(squareform(jaccard_dist, checks=False), method="average")
+    merge_heights = Z[:, 2]
+    nonzero = merge_heights[merge_heights > 1e-9]
+
+    if len(nonzero) < 2:
+        return float(np.median(merge_heights)) if len(merge_heights) else 0.5, {"method": "fallback_median"}
+
+    gaps = np.diff(nonzero)
+    idx = np.argmax(gaps)
+    elbow = (nonzero[idx] + nonzero[idx + 1]) / 2
+
+    candidates = np.arange(max(elbow - search_radius, 1e-3), elbow + search_radius + step, step)
+    best_score, best_threshold, scores = -1.0, elbow, {}
+    for t in candidates:
+        model = AgglomerativeClustering(n_clusters=None, distance_threshold=t,
+                                         metric="precomputed", linkage="average")
+        labs = model.fit_predict(jaccard_dist)
+        n_clusters = len(set(labs))
+        if 1 < n_clusters < len(labs):
+            s = silhouette_score(jaccard_dist, labs, metric="precomputed")
+            scores[round(float(t), 3)] = float(s)
+            if s > best_score:
+                best_score, best_threshold = s, t
+
+    return float(best_threshold), {
+        "method": "elbow_then_silhouette",
+        "elbow_raw": float(elbow),
+        "best_silhouette": float(best_score),
+        "silhouette_by_threshold": scores,
+    }
+
+def dominant_label_clustering(data, alpha=1.5):
     labels_names = list(data[0].keys())
     K = len(labels_names)
 
@@ -38,7 +79,11 @@ def dominant_label_clustering(data, alpha=1.5, threshold=0.75):
     signature = (prop > alpha / K).astype(int)
 
     jaccard_dist = pairwise_distances(signature, metric='jaccard')
-
+    threshold, info = suggest_distance_threshold(jaccard_dist)
+    
+    print(f"De xuat tu dong distance_threshold = {threshold:.3f} "
+          f"(elbow_raw={info.get('elbow_raw', '-'):.3f}, "
+          f"silhouette={info.get('best_silhouette', float('nan')):.3f})\n")
     model = AgglomerativeClustering(n_clusters=None, distance_threshold=threshold,
                                     metric='precomputed', linkage='average')
     cluster_ids = model.fit_predict(jaccard_dist)
