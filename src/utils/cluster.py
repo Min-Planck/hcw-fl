@@ -44,7 +44,7 @@ def dominant_label_clustering(data, alpha=1.5, threshold=0.75):
     cluster_ids = model.fit_predict(jaccard_dist)
 
 
-    return {i: int(cluster_id) for i, cluster_id in enumerate(cluster_ids)}
+    return cluster_ids
 
 def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', noise_level=0.05, num_clusters=8, cluster_size=None):
     distrib_ = build_distribution(dist, noise_level=noise_level)
