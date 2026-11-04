@@ -88,6 +88,8 @@ algo = get_algorithm(ALGO)
 strategy = algo(
     exp_name=f"{ALGO}_{DATASET}_{MODEL}",
     net=net_,
+    fraction_fit=general_cfg.fraction_fit,
+    decay_rate=general_cfg.decay_rate,
     num_rounds=general_cfg.num_rounds,
     num_clients=general_cfg.num_clients,
     testloader=testloader,
@@ -95,7 +97,6 @@ strategy = algo(
     learning_rate=general_cfg.learning_rate,
     current_parameters=current_parameters
 )
-
 print(f"Starting Federated Learning with {ALGO} on {DATASET} dataset")
 
 fl.simulation.start_simulation(
