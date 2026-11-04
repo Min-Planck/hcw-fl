@@ -5,7 +5,7 @@ import random
 from sklearn.cluster import OPTICS
 from scipy.optimize import linear_sum_assignment
 from scipy.cluster.hierarchy import linkage
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import squareform, pdist
 
 from .distance import hellinger, jensen_shannon_divergence_distance
 
@@ -43,8 +43,12 @@ def suggest_distance_threshold(jaccard_dist, search_radius=0.1, step=0.02):
     merge_heights = Z[:, 2]
     nonzero = merge_heights[merge_heights > 1e-9]
 
-    if len(nonzero) < 2:
-        return float(np.median(merge_heights)) if len(merge_heights) else 0.5, {"method": "fallback_median"}
+    if len(nonzero) == 0:
+        return 0.5, {"method": "fallback_identical"}
+
+    if len(nonzero) == 1:
+        threshold = float(nonzero[0]) / 2
+        return threshold, {"method": "fallback_single_nonzero_merge"}
 
     gaps = np.diff(nonzero)
     idx = np.argmax(gaps)
@@ -70,26 +74,34 @@ def suggest_distance_threshold(jaccard_dist, search_radius=0.1, step=0.02):
         "silhouette_by_threshold": scores,
     }
 
-def dominant_label_clustering(data, alpha=1.5):
+def dominant_label_clustering(data, alpha=1.5, distance="jaccard", verbose=True):
     labels_names = list(data[0].keys())
     K = len(labels_names)
 
     counts = np.array([[d[l] for l in labels_names] for d in data], dtype=float)
     prop = counts / counts.sum(axis=1, keepdims=True)
-    signature = (prop > alpha / K).astype(int)
 
-    jaccard_dist = pairwise_distances(signature, metric='jaccard')
-    threshold, info = suggest_distance_threshold(jaccard_dist)
+    if distance == "jaccard":
+        sig = (prop > alpha / K)
+        D = pairwise_distances(sig, metric="jaccard")
+    elif distance == "euclidean":
+        D = squareform(pdist(prop, "euclidean")) / np.sqrt(2)            # đưa về [0, 1]
+    elif distance == "hellinger":
+        D = pairwise_distances(prop, metric=hellinger)    # Hellinger, trong [0, 1]
+    else:
+        raise ValueError(f"distance must be 'jaccard', 'euclidean' or 'hellinger', got {distance!r}")
     
-    print(f"De xuat tu dong distance_threshold = {threshold:.3f} "
-          f"(elbow_raw={info.get('elbow_raw', '-'):.3f}, "
-          f"silhouette={info.get('best_silhouette', float('nan')):.3f})\n")
+    threshold, info = suggest_distance_threshold(D)
+
+    if verbose:
+        print(f"[{distance}] distance_threshold = {threshold:.3f} "
+              f"(method={info['method']}, "
+              f"elbow_raw={info.get('elbow_raw', float('nan')):.3f}, "
+              f"silhouette={info.get('best_silhouette', float('nan')):.3f})")
+
     model = AgglomerativeClustering(n_clusters=None, distance_threshold=threshold,
-                                    metric='precomputed', linkage='average')
-    cluster_ids = model.fit_predict(jaccard_dist)
-
-
-    return cluster_ids
+                                    metric="precomputed", linkage="average")
+    return model.fit_predict(D)
 
 def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', noise_level=0.05, num_clusters=8, cluster_size=None):
     distrib_ = build_distribution(dist, noise_level=noise_level)
@@ -133,7 +145,7 @@ def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', n
         else:
             labels, centroid = balanced_kmeans(X=distrib_, num_clusters=num_clusters, cluster_sizes=cluster_size, verbose=False)
     elif algo == 'dominant_label':
-        labels = dominant_label_clustering(dist)
+        labels = dominant_label_clustering(dist, distance=distance)
 
     client_cluster_index = {i: int(lab) for i, lab in enumerate(labels)}
 
