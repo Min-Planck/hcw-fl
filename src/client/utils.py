@@ -7,7 +7,8 @@ from flwr.common import parameters_to_ndarrays, ndarrays_to_parameters
 from src.utils import train, get_parameters
 from src.algo import train_moon, train_scaffold
 
-MOON_SAVE_DIR = '/moon_save_point/'
+# Absolute path at project root so Ray workers resolve it regardless of their cwd
+MOON_SAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'moon_save_point')
 DEFAULT_METRICS = {
     "loss": None,
     "accuracy": None,
@@ -43,15 +44,12 @@ def fit_handler(algo_name, cid, config, net, trainloader, client_control=None, p
         res_metrics = train(net, trainloader, DEVICE=config['device'], learning_rate=config["learning_rate"], epochs=config["epochs"], use_ntd_loss=True, tau=config["tau"], beta=config["beta"])
     elif algo_name == "moon": 
         save_dir = os.path.join(MOON_SAVE_DIR, f"client_{cid}")
+        prev_net_path = os.path.join(save_dir, "prev_net.pt")
         pre_round_net = copy.deepcopy(net)
 
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        else: 
-            prev_net_path = os.path.join(save_dir, "prev_net.pt")
-            if os.path.exists(prev_net_path):
-                pre_round_net.load_state_dict(torch.load(prev_net_path))
-        
+        if os.path.exists(prev_net_path):
+            pre_round_net.load_state_dict(torch.load(prev_net_path, map_location="cpu"))
+
         global_net = copy.deepcopy(net)
         
         _, loss, acc = train_moon(
@@ -65,9 +63,8 @@ def fit_handler(algo_name, cid, config, net, trainloader, client_control=None, p
             epochs=config["epochs"],
         )
 
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-            torch.save(net.state_dict(), os.path.join(save_dir, "prev_net.pt"))
+        os.makedirs(save_dir, exist_ok=True)
+        torch.save(net.state_dict(), prev_net_path)
             
         res_metrics = {
             "loss": loss,

@@ -8,6 +8,8 @@ from easydict import EasyDict
 
 from src.utils import get_train_data, set_seed, get_configs, get_model, get_algorithm, get_parameters, clustering
 from src.client import BaseClient, SimpleClientManager
+from src.client.utils import MOON_SAVE_DIR
+import shutil
 
 # ----------- CHANGE HERE -------------
 ALGO = 'fedntd'
@@ -97,6 +99,11 @@ strategy = algo(
     learning_rate=general_cfg.learning_rate,
     current_parameters=current_parameters
 )
+
+# Remove previous-round models left over from an earlier MOON run
+if ALGO == 'moon':
+    shutil.rmtree(MOON_SAVE_DIR, ignore_errors=True)
+
 print(f"Starting Federated Learning with {ALGO} on {DATASET} dataset")
 
 fl.simulation.start_simulation(
