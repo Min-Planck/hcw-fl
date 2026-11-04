@@ -144,6 +144,9 @@ def clustering(dist, min_smp=2, eps=0.45, algo='kmeans', distance='manhattan', n
             labels, centroid = balanced_kmeans(X=distrib_, num_clusters=num_clusters, cluster_sizes=cluster_size, distance_func=jensen_shannon_divergence_distance, verbose=False)
         else:
             labels, centroid = balanced_kmeans(X=distrib_, num_clusters=num_clusters, cluster_sizes=cluster_size, verbose=False)
+    elif algo == 'none':
+        # Ablation: each client is its own cluster
+        labels = list(range(len(dist)))
     elif algo == 'dominant_label':
         labels = dominant_label_clustering(dist, distance=distance)
 

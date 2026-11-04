@@ -1,2 +1,12 @@
 res1
 moon_save_point/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+
+# Run outputs
+data/
+result/
