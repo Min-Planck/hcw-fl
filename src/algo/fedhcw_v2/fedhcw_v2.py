@@ -13,6 +13,11 @@ class FedHCW_V2(FedAvg):
         self.alpha = self.algorithm_config['alpha']
         self.current_angles = {}
 
+        # Ablation flags for the inter-cluster weight N_c * S_c * exp(f(theta_c))
+        self.use_volume = self.algorithm_config['use_volume']      # N_c
+        self.use_entropy = self.algorithm_config['use_entropy']    # S_c
+        self.use_angle = self.algorithm_config['use_angle']        # exp(f(theta_c))
+
     
     def __repr__(self): 
         return 'FedHCW_V2'
@@ -93,48 +98,53 @@ class FedHCW_V2(FedAvg):
             ids.append(int(fit_res.metrics['cluster_id']))
 
 
-        local_updates = np.array(weights_results, dtype=object) - np.array(parameters_to_ndarrays(self.current_parameters), dtype=object)
+        weights = np.ones(len(ids), dtype=float)
 
-        local_gradients = -local_updates/self.learning_rate
-        local_grad_vectors = [np.concatenate([arr for arr in local_gradient], axis = None)
-                            for local_gradient in local_gradients]
-        
-        global_gradient = np.sum(np.array(num_examples).reshape(len(num_examples), 1) * local_gradients, axis=0) / sum(num_examples)
+        if self.use_angle:
+            local_updates = np.array(weights_results, dtype=object) - np.array(parameters_to_ndarrays(self.current_parameters), dtype=object)
 
+            local_gradients = -local_updates/self.learning_rate
+            local_grad_vectors = [np.concatenate([arr for arr in local_gradient], axis = None)
+                                for local_gradient in local_gradients]
 
-        global_grad_vector = np.concatenate([arr for arr in global_gradient], axis = None)
-            
-        dot_products = [np.dot(local_grad_vector, global_grad_vector) for local_grad_vector in local_grad_vectors]
-        norms = [np.linalg.norm(local_grad_vector) * np.linalg.norm(global_grad_vector) for local_grad_vector in local_grad_vectors]
-            
-        cosine_values = [dot / norm if norm != 0 else 0 for dot, norm in zip(dot_products, norms)]
-            
-        clipped_cosine_values = np.clip(cosine_values, -1.0, 1.0)
+            # The reference (global) gradient stays sample-weighted as in FedAdp, also when use_volume is off
+            global_gradient = np.sum(np.array(num_examples).reshape(len(num_examples), 1) * local_gradients, axis=0) / sum(num_examples)
 
 
-        instant_angles = np.arccos(clipped_cosine_values)
-        
+            global_grad_vector = np.concatenate([arr for arr in global_gradient], axis = None)
 
-        id_to_instant_angle = dict(zip(ids, instant_angles))
-        smoothed_angles = []
-        for cluster_id in ids:
-            prev_angle = self.current_angles.get(cluster_id, None)
-            curr_angle = id_to_instant_angle[cluster_id]
-            if prev_angle is None:
-                smoothed = curr_angle
-            else:
-                smoothed = (server_round - 1) / server_round * prev_angle + 1 / server_round * curr_angle
-            smoothed_angles.append(smoothed)
-            self.current_angles[cluster_id] = smoothed
+            dot_products = [np.dot(local_grad_vector, global_grad_vector) for local_grad_vector in local_grad_vectors]
+            norms = [np.linalg.norm(local_grad_vector) * np.linalg.norm(global_grad_vector) for local_grad_vector in local_grad_vectors]
 
-        maps = self.alpha*(1-np.exp(-np.exp(-self.alpha*(np.array(smoothed_angles)-1))))
+            cosine_values = [dot / norm if norm != 0 else 0 for dot, norm in zip(dot_products, norms)]
 
-        entropy_weights = np.array(cluster_entropies, dtype=float)
-        weights = (
-            np.array(num_examples, dtype=float)
-            * entropy_weights
-            * np.exp(maps)
-        )
+            clipped_cosine_values = np.clip(cosine_values, -1.0, 1.0)
+
+
+            instant_angles = np.arccos(clipped_cosine_values)
+
+
+            id_to_instant_angle = dict(zip(ids, instant_angles))
+            smoothed_angles = []
+            for cluster_id in ids:
+                prev_angle = self.current_angles.get(cluster_id, None)
+                curr_angle = id_to_instant_angle[cluster_id]
+                if prev_angle is None:
+                    smoothed = curr_angle
+                else:
+                    smoothed = (server_round - 1) / server_round * prev_angle + 1 / server_round * curr_angle
+                smoothed_angles.append(smoothed)
+                self.current_angles[cluster_id] = smoothed
+
+            maps = self.alpha*(1-np.exp(-np.exp(-self.alpha*(np.array(smoothed_angles)-1))))
+            weights *= np.exp(maps)
+
+        if self.use_volume:
+            weights *= np.array(num_examples, dtype=float)
+
+        if self.use_entropy:
+            weights *= np.array(cluster_entropies, dtype=float)
+
         weights /= np.sum(weights)
         parameters_aggregated = np.sum(weights.reshape(len(weights), 1) * np.array(weights_results, dtype=object), axis=0)
 

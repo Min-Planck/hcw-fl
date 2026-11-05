@@ -60,10 +60,15 @@ fedhcw:
   weighting_method: 'normal' 
   distance: 'hellinger'
 
-fedhcw2: 
+# use_volume / use_entropy / use_angle: ablation flags for the terms N_c, S_c, exp(f(theta_c)) of the inter-cluster weight
+# (ablation without clustering: set CLUSTER_ALGO = 'none' in main.py)
+fedhcw2:
   <<: *base_config
   alpha: 5
   distance: 'hellinger'
+  use_volume: true
+  use_entropy: true
+  use_angle: true
 
 fedaaw: 
   <<: *base_config
